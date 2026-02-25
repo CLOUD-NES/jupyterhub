@@ -6,8 +6,7 @@
 
   - name: Start JupyterLab
     community.docker.docker_image:
-      name: quay.io/jupyter/minimal-notebook:2026-02-19
-      # name: ghcr.io/cloud-nes/jupyter:latest
+      name: ghcr.io/cloud-nes/jupyter:latest
       source: pull
 
   - name: Create nginx location block
