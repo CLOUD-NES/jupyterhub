@@ -5,7 +5,7 @@ services:
     environment:
       - DASK_DISTRIBUTED__DASHBOARD__LINK="/proxy/{port}/status"
     ports:
-      - "8888:8888"
+      - 8888:8888
 
   nginx:
     image: nginx:1.25-alpine
