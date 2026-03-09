@@ -10,6 +10,7 @@ dependencies:
  - nbclassic
  - notebook>=7.2.2
 # Additional Jupyter packages and extensions
+ - jupytergis
  - jupyterlab-git  # git is already installed in the jupyter/minimal-notebook image
  - dask-labextension
 # STAC
