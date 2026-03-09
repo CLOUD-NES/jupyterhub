@@ -1,0 +1,75 @@
+- name: Deploy CLOUD-NES JupyterHub on SURF Research Cloud
+  hosts: localhost
+  gather_facts: false
+  vars: {}
+  tasks:
+
+  - name: Install configurable http proxy
+    npm:
+      name: configurable-http-proxy
+      global: yes
+
+  - name: Install JupyterHub and DockerSpawner
+    pip:
+      name:
+        - jupyterhub
+        - dockerspawner
+        - jupyter_client # needed by the docker instances to access the hub
+        - jupyterhub-idle-culler # service to stop idle or long-running instances
+
+  - name: Create /etc/jupyterhub directory
+    file:
+      path: /etc/jupyterhub
+      state: directory
+      mode: '0755'
+
+  - name: jupyterhub_config
+    copy:
+      src: config/jupyterhub_config.py
+      dest: /etc/jupyterhub/jupyterhub_config.py
+      mode: '0644'
+
+  - name: JupyterHub systemd file
+    copy:
+      dest: /etc/systemd/system/jupyterhub.service
+      mode: '0644'
+      content: |
+        [Unit]
+        Description=Jupyterhub
+        After=syslog.target network.target
+
+        [Service]
+        User=root
+        ExecStart=jupyterhub --upgrade-db -f /etc/jupyterhub/jupyterhub_config.py
+        ExecReload=/bin/kill -s HUP $MAINPID
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: jupyterhub service enabled
+    systemd:
+      name: jupyterhub
+      state: reloaded
+      daemon_reload: yes
+      enabled: yes
+
+  - name: Create nginx location block
+    copy:
+      dest: /etc/nginx/app-location-conf.d/jupyterhub.conf
+      mode: '0644'
+      content: |
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_redirect http://localhost:8000/ $scheme://$host/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "Upgrade";
+            client_max_body_size 10G;
+        }
+
+  - name: Restart nginx
+    systemd:
+      name: nginx
+      state: restarted
