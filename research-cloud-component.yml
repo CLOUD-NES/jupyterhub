@@ -4,6 +4,12 @@
   vars: {}
   tasks:
 
+  - name: Install npm
+    apt:
+      update_cache: yes
+      pkg:
+        - npm
+
   - name: Install configurable http proxy
     npm:
       name: configurable-http-proxy
