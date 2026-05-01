@@ -1,71 +1,69 @@
-import sys
+# Copyright (c) Jupyter Development Team.
+# Distributed under the terms of the Modified BSD License.
 
-c = get_config()
+# Configuration file for JupyterHub
+import os
 
-# The docker instances need access to the Hub, so the default loopback port doesn't work:
-from jupyter_client.localinterfaces import public_ips
-c.JupyterHub.hub_ip = public_ips()[0]
+c = get_config()  # noqa: F821
 
-c.JupyterHub.services = [
-    {
-        'name': 'idle-culler',
-        'admin': True,
-        'command': [
-            sys.executable,
-            '-m',
-            'jupyterhub_idle_culler',
-            # Servers that have been idle for longer then timeout (in seconds) will be culled.
-            '--timeout=86400', # 1 day
-            # The maximum age (in seconds) of servers that should be culled even if they are active.
-            '--max_age=604800', # 7 days
-        ],
-    }
-]
+# We rely on environment variables to configure JupyterHub so that we
+# avoid having to rebuild the JupyterHub container every time we change a
+# configuration parameter.
 
-c.JupyterHub.bind_url = 'https://127.0.0.1:8000'
-c.JupyterHub.port = 8000
+# Spawn single-user servers as Docker containers
+c.JupyterHub.spawner_class = "dockerspawner.DockerSpawner"
 
-# Don't interrupt users when jupyterhub service is restarted
-c.JupyterHub.cleanup_servers = False
-c.JupyterHub.cleanup_proxy = False
+# Spawn containers from this image
+c.DockerSpawner.image = "ghcr.io/cloud-nes/jupyterhub:latest"
 
-# Delete any users from the database that do not pass validation
-c.Authenticator.delete_invalid_users = True
+# Connect containers to this Docker network
+c.DockerSpawner.use_internal_ip = True
+c.DockerSpawner.network_name = "jupyterhub-network"
 
-# Users who successfully authenticate are allowed in
-c.Authenticator.allow_all = True
-
-# Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-c.Application.log_level = 'DEBUG'
-
-c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'
-
-# replace with your desired image see https://github.com/jupyter/docker-stacks/tree/main/images
-c.DockerSpawner.image = 'ghcr.io/cloud-nes/jupyter:latest'
-
-# Default access point
-c.Spawner.default_url = '/lab?reset'
-
-# set c.Spawner.cmd to launch singleuser server with jupyterlab
-c.Spawner.cmd = ['jupyter-labhub']
+# Explicitly set notebook directory because we'll be mounting a volume to it.
+# Most `jupyter/docker-stacks` *-notebook images run the Notebook server as
+# user `jovyan`, and set the notebook directory to `/home/jovyan/work`.
+# We follow the same convention.
+notebook_dir = "/home/jovyan/work"
+c.DockerSpawner.notebook_dir = notebook_dir
 
 # Mount the real user's Docker volume on the host to the notebook user's
 # notebook directory in the container
-# On SRC, the scratch directory should be mounted and not /home directory
-# default mode is  "mode": "rw"
-c.DockerSpawner.volumes = {
-    "/scratch": {"bind": "/home/jovyan/scratch"},
-    "/data": {"bind": "/home/jovyan/data"}
-}
+c.DockerSpawner.volumes = {"jupyterhub-user-{username}": notebook_dir}
 
-# Delete containers when servers are stopped. This will destroy any data in the
-# container not stored in mounted volumes. Default is False, that means when the
-# server is stopped by the user, the container status is Exited(0) i.e. stopped.
-# In this case, the container is not deleted, but it is not running too. If the
-# user starts the server again, the same container is re-started and therefore
-# data and packages installed are preserved. If the user closes the browser
-# without stopping the server, the container will continue running.
-# c.DockerSpawner.remove = True
+# Remove containers once they are stopped
+c.DockerSpawner.remove = True
 
 # For debugging arguments passed to spawned containers
 c.DockerSpawner.debug = True
+
+# User containers will access hub by container name on the Docker network
+c.JupyterHub.hub_ip = "jupyterhub"
+c.JupyterHub.hub_port = 8081
+
+# Proxy API (points to separate container)
+c.JupyterHub.cleanup_servers = False
+c.JupyterHub.cleanup_proxy = False
+
+# Run proxy separately from jupyterhub
+c.ConfigurableHTTPProxy.should_start = False
+c.ConfigurableHTTPProxy.auth_token = "CONFIGPROXY_AUTH_TOKEN"
+c.ConfigurableHTTPProxy.api_url = "http://proxy:8001"
+
+# Persist hub data on volume mounted inside container
+c.JupyterHub.cookie_secret_file = "/data/jupyterhub_cookie_secret"
+c.JupyterHub.db_url = "sqlite:////data/jupyterhub.sqlite"
+
+# Allow all signed-up users to login
+c.Authenticator.allow_all = True
+
+# Authenticate users with Native Authenticator
+c.JupyterHub.authenticator_class = "nativeauthenticator.NativeAuthenticator"
+
+# Allow anyone to sign-up without approval
+c.NativeAuthenticator.open_signup = True
+
+# Allowed admins
+admin = os.environ.get("JUPYTERHUB_ADMIN")
+if admin:
+    c.Authenticator.admin_users = [admin]
