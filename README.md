@@ -14,7 +14,7 @@ Participants log in with any username (lowercase letters, digits, `_ . -`) and t
 
 ## JupyterLab image
 
-The user image (`singleuser/`) is built by GitHub Actions (`.github/workflows/build-singleuser.yml`) and pushed to `ghcr.io/<github-owner>/workshop-singleuser` whenever `singleuser/` changes on `main`. Pull requests only test the build.
+The user image (`singleuser/`) is built by GitHub Actions (`.github/workflows/build-singleuser.yml`) and pushed to `ghcr.io/cloud-nes/jupyter-singleuser` whenever `singleuser/` changes on `main`. Pull requests only test the build.
 
 To prepare an image for a workshop:
 
