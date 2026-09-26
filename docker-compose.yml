@@ -1,6 +1,7 @@
 services:
   proxy:
     image: quay.io/jupyterhub/configurable-http-proxy:latest
+    container_name: jupyterhub-proxy
     command:
       - --ip=0.0.0.0
       - --port=8000
@@ -19,7 +20,7 @@ services:
   hub:
     build: ./hub
     image: hub:latest
-    container_name: jupyterhub
+    container_name: jupyterhub-hub
     hostname: hub
     environment:
       CONFIGPROXY_AUTH_TOKEN: ${CONFIGPROXY_AUTH_TOKEN}
@@ -59,3 +60,4 @@ networks:
 
 volumes:
   jupyterhub-data:
+    name: jupyterhub-data
