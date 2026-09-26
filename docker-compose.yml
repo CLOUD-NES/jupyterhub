@@ -1,22 +1,61 @@
 services:
-  jupyter:
-    image: cloud-nes/jupyter
-    build: .
+  proxy:
+    image: quay.io/jupyterhub/configurable-http-proxy:latest
+    command:
+      - --ip=0.0.0.0
+      - --port=8000
+      - --api-ip=0.0.0.0
+      - --api-port=8001
+      - --default-target=http://hub:8081
+      - --error-target=http://hub:8081/hub/error
     environment:
-      - DASK_DISTRIBUTED__DASHBOARD__LINK="/proxy/{port}/status"
+      CONFIGPROXY_AUTH_TOKEN: ${CONFIGPROXY_AUTH_TOKEN:?set CONFIGPROXY_AUTH_TOKEN in .env}
     ports:
-      - 8888:8888
+      - "8000:8000"
+    networks:
+      - jupyterhub-network
+    restart: unless-stopped
 
-  nginx:
-    image: nginx:1.25-alpine
-    ports:
-      - 80:80
+  hub:
+    build: ./hub
+    image: hub:latest
+    container_name: jupyterhub
+    hostname: hub
+    environment:
+      CONFIGPROXY_AUTH_TOKEN: ${CONFIGPROXY_AUTH_TOKEN}
+      JUPYTERHUB_SHARED_PASSWORD: ${JUPYTERHUB_SHARED_PASSWORD:?set JUPYTERHUB_SHARED_PASSWORD in .env}
+      JUPYTERHUB_ADMIN_PASSWORD: ${JUPYTERHUB_ADMIN_PASSWORD:-}
+      JUPYTERHUB_ADMIN_USERS: ${JUPYTERHUB_ADMIN_USERS:-}
+      DOCKER_NOTEBOOK_IMAGE: ${DOCKER_NOTEBOOK_IMAGE:?set DOCKER_NOTEBOOK_IMAGE in .env}
+      DOCKER_NETWORK_NAME: jupyterhub-network
+      USER_STORAGE_DIR: ${USER_STORAGE_DIR:-/data/storage/users}
+      SHARED_DIR: ${SHARED_DIR:-/data/storage/shared}
+      MEM_LIMIT: ${MEM_LIMIT:-2G}
+      CPU_LIMIT: ${CPU_LIMIT:-1}
+      CULL_TIMEOUT: ${CULL_TIMEOUT:-3600}
     volumes:
-      - ./testconfig/nginx.conf:/etc/nginx/nginx.conf
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path inside and outside: DockerSpawner bind-mount sources are host
+      # paths, and the hub creates the per-user directories before spawning.
+      - ${USER_STORAGE_DIR:-/data/storage/users}:${USER_STORAGE_DIR:-/data/storage/users}
+      - jupyterhub-data:/srv/jupyterhub
+    networks:
+      - jupyterhub-network
     depends_on:
-      - jupyter
-    command: [ "nginx", "-g", "daemon off;" ]
+      - proxy
+    restart: unless-stopped
+
+  # The single-user image is built by GitHub Actions and pulled from ghcr.io.
+  # For local testing only: docker compose --profile build build singleuser
+  # and set DOCKER_NOTEBOOK_IMAGE=jupyter-singleuser:dev in .env
+  singleuser:
+    build: ./singleuser
+    image: jupyter-singleuser:dev
+    profiles: ["build"]
 
 networks:
-  default:
-    name: jupyter-network
+  jupyterhub-network:
+    name: jupyterhub-network
+
+volumes:
+  jupyterhub-data:
