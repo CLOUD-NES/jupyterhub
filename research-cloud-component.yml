@@ -1,63 +1,53 @@
-- name: Deploy CLOUD-NES JupyterHub on SURF Research Cloud
+- name: Deploy JupyterHub on SURF Research Cloud
   hosts: localhost
   gather_facts: false
-  vars: {}
+  vars:
+    storage_dir: /data/{{ user_storage_name }}
   tasks:
 
-  - name: Install npm
-    apt:
-      update_cache: yes
-      pkg:
-        - npm
-
-  - name: Install configurable http proxy
-    npm:
-      name: configurable-http-proxy
-      global: yes
-
-  - name: Install JupyterHub and DockerSpawner
-    pip:
-      name:
-        - jupyterhub
-        - dockerspawner
-        - jupyter_client # needed by the docker instances to access the hub
-        - jupyterhub-idle-culler # service to stop idle or long-running instances
-
-  - name: Create /etc/jupyterhub directory
+  - name: Create directory for user homes on persistent storage
     file:
-      path: /etc/jupyterhub
+      path: "{{ storage_dir }}/users"
       state: directory
       mode: '0755'
 
-  - name: jupyterhub_config
-    copy:
-      src: config/jupyterhub_config.py
-      dest: /etc/jupyterhub/jupyterhub_config.py
-      mode: '0644'
+  - name: Create directory for shared space on persistent storage
+    file:
+      path: "{{ storage_dir }}/shared"
+      state: directory
+      mode: '0755'
 
-  - name: JupyterHub systemd file
+  - name: Pull the single-user JupyterLab image
+    community.docker.docker_image:
+      name: "{{ docker_notebook_image }}"
+      source: pull
+      pull:
+        platform: amd64
+
+  - name: Write .env for docker compose
+    no_log: true
     copy:
-      dest: /etc/systemd/system/jupyterhub.service
-      mode: '0644'
+      dest: "{{ playbook_dir }}/.env"
+      mode: '0600'
       content: |
-        [Unit]
-        Description=Jupyterhub
-        After=syslog.target network.target
+        CONFIGPROXY_AUTH_TOKEN='{{ lookup('password', '/dev/null chars=hexdigits length=64') }}'
+        JUPYTERHUB_SHARED_PASSWORD='{{ jupyterhub_shared_password }}'
+        JUPYTERHUB_ADMIN_USERS='{{ jupyterhub_admin_users | default('') }}'
+        JUPYTERHUB_ADMIN_PASSWORD='{{ jupyterhub_admin_password | default('') }}'
+        DOCKER_NOTEBOOK_IMAGE='{{ docker_notebook_image }}'
+        USER_STORAGE_DIR='{{ storage_dir }}/users'
+        SHARED_DIR='{{ storage_dir }}/shared'
+        MEM_LIMIT='{{ mem_limit | default('2G') }}'
+        CPU_LIMIT='{{ cpu_limit | default('1') }}'
+        CULL_TIMEOUT='{{ cull_timeout | default('3600') }}'
 
-        [Service]
-        User=root
-        ExecStart=jupyterhub --upgrade-db -f /etc/jupyterhub/jupyterhub_config.py
-        ExecReload=/bin/kill -s HUP $MAINPID
-
-        [Install]
-        WantedBy=multi-user.target
-
-  - name: jupyterhub service enabled
-    systemd:
-      name: jupyterhub
-      state: reloaded
-      daemon_reload: yes
-      enabled: yes
+  - name: Start JupyterHub
+    community.docker.docker_compose_v2:
+      project_src: "{{ playbook_dir }}"
+      services:
+      - hub
+      wait: true
+      wait_timeout: 60
 
   - name: Create nginx location block
     copy:
