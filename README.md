@@ -65,6 +65,12 @@ docker rm -f $(docker ps -aq --filter name=jupyter-)   # stop all user servers
 
 Web apps that users start inside their server (e.g. on port 8001) are reachable via `jupyter-server-proxy` at `http://<hub-host>:8000/user/<username>/proxy/8001/`, only for that user (and admins).
 
+To give each participant their own writable copy of a git repository, share an `nbgitpuller` link (build one with the [link generator](https://nbgitpuller.readthedocs.io/en/latest/link.html)):
+
+```
+http://<hub-host>:8000/hub/user-redirect/git-pull?repo=<repo-url>&branch=main&urlpath=lab/tree/<repo-name>
+```
+
 Admins (`JUPYTERHUB_ADMIN_USERS`, logging in with `JUPYTERHUB_ADMIN_PASSWORD`) can manage servers at `/hub/admin`.
 
 ## After the workshop
