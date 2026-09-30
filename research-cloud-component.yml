@@ -5,17 +5,14 @@
     storage_dir: /data/{{ user_storage_name }}
   tasks:
 
-  - name: Create directory for user homes on persistent storage
+  - name: Create directory for user homes and shared space on persistent storage
     file:
-      path: "{{ storage_dir }}/users"
+      path: "{{ storage_dir }}/{{ item }}"
       state: directory
       mode: '0755'
-
-  - name: Create directory for shared space on persistent storage
-    file:
-      path: "{{ storage_dir }}/shared"
-      state: directory
-      mode: '0755'
+    loop:
+    - users
+    - shared
 
   - name: Pull the single-user JupyterLab image
     community.docker.docker_image:
@@ -64,8 +61,11 @@
             proxy_set_header Connection "Upgrade";
             client_max_body_size 10G;
         }
+      notify: Reload nginx
 
-  - name: Restart nginx
+  handlers:
+
+  - name: Reload nginx
     systemd:
       name: nginx
-      state: restarted
+      state: reloaded
