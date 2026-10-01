@@ -61,7 +61,7 @@
             proxy_set_header Connection "Upgrade";
             client_max_body_size 10G;
         }
-      notify: Reload nginx
+    notify: Reload nginx
 
   handlers:
 
